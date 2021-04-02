@@ -10,7 +10,7 @@
 #ifndef SRC_KAFKA_CONSUMER_H_
 #define SRC_KAFKA_CONSUMER_H_
 
-#include <nan.h>
+#include <napi.h>
 #include <uv.h>
 #include <iostream>
 #include <string>
@@ -36,8 +36,6 @@ namespace NodeKafka {
 
 class KafkaConsumer : public Connection {
  public:
-  static void Init(v8::Local<v8::Object>);
-  static v8::Local<v8::Object> NewInstance(v8::Local<v8::Value>);
 
   Baton Connect();
   Baton Disconnect();
@@ -82,42 +80,21 @@ class KafkaConsumer : public Connection {
 
   void ActivateDispatchers();
   void DeactivateDispatchers();
-
- protected:
-  static Nan::Persistent<v8::Function> constructor;
-  static void New(const Nan::FunctionCallbackInfo<v8::Value>& info);
-
   KafkaConsumer(Conf *, Conf *);
   ~KafkaConsumer();
+  std::vector<RdKafka::TopicPartition*> m_partitions;
+ protected:
+
+  
 
  private:
   static void part_list_print(const std::vector<RdKafka::TopicPartition*>&);
 
-  std::vector<RdKafka::TopicPartition*> m_partitions;
+  
   int m_partition_cnt;
   bool m_is_subscribed = false;
 
-  // Node methods
-  static NAN_METHOD(NodeConnect);
-  static NAN_METHOD(NodeSubscribe);
-  static NAN_METHOD(NodeDisconnect);
-  static NAN_METHOD(NodeAssign);
-  static NAN_METHOD(NodeUnassign);
-  static NAN_METHOD(NodeAssignments);
-  static NAN_METHOD(NodeUnsubscribe);
-  static NAN_METHOD(NodeCommit);
-  static NAN_METHOD(NodeCommitSync);
-  static NAN_METHOD(NodeOffsetsStore);
-  static NAN_METHOD(NodeCommitted);
-  static NAN_METHOD(NodePosition);
-  static NAN_METHOD(NodeSubscription);
-  static NAN_METHOD(NodeSeek);
-  static NAN_METHOD(NodeGetWatermarkOffsets);
-  static NAN_METHOD(NodeConsumeLoop);
-  static NAN_METHOD(NodeConsume);
 
-  static NAN_METHOD(NodePause);
-  static NAN_METHOD(NodeResume);
 };
 
 }  // namespace NodeKafka

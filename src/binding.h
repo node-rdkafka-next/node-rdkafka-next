@@ -10,16 +10,16 @@
 #ifndef SRC_BINDING_H_
 #define SRC_BINDING_H_
 
-#include <nan.h>
+#include <napi.h>
 #include <string>
 #include "rdkafkacpp.h"
 #include "src/common.h"
 #include "src/errors.h"
 #include "src/config.h"
 #include "src/connection.h"
-#include "src/kafka-consumer.h"
-#include "src/producer.h"
-#include "src/topic.h"
-#include "src/admin.h"
+#include "src/kafka-consumer-napi.h"
+#include "src/producer-napi.h"
+#include "src/topic-napi.h"
+#include "src/admin-napi.h"
 
 #endif  // SRC_BINDING_H_

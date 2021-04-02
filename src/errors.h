@@ -10,7 +10,7 @@
 #ifndef SRC_ERRORS_H_
 #define SRC_ERRORS_H_
 
-#include <nan.h>
+#include <napi.h>
 #include <iostream>
 #include <string>
 
@@ -33,7 +33,7 @@ class Baton {
   RdKafka::ErrorCode err();
   std::string errstr();
 
-  v8::Local<v8::Object> ToObject();
+  Napi::Object ToObject(Napi::Env);
 
  private:
   void* m_data;
@@ -41,7 +41,7 @@ class Baton {
   RdKafka::ErrorCode m_err;
 };
 
-v8::Local<v8::Object> RdKafkaError(const RdKafka::ErrorCode &);
+Napi::Object RdKafkaError(Napi::Env, const RdKafka::ErrorCode &);
 
 }  // namespace NodeKafka
 

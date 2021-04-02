@@ -7,20 +7,19 @@
  * of the MIT license.  See the LICENSE.txt file for details.
  */
 
-#ifndef SRC_ADMIN_H_
-#define SRC_ADMIN_H_
-
+#ifndef SRC_ADMIN_NAPI_H_
+#define SRC_ADMIN_NAPI_H_
+#include <napi.h>
 #include <uv.h>
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "rdkafkacpp.h"
-#include "rdkafka.h"  // NOLINT
 
 #include "src/common.h"
 #include "src/connection.h"
 #include "src/callbacks.h"
+#include "src/admin.h"
 
 namespace NodeKafka {
 
@@ -34,32 +33,33 @@ namespace NodeKafka {
  * @sa NodeKafka::Client
  */
 
-class AdminClient : public Connection {
+class AdminClientNapi : public Napi::ObjectWrap<AdminClientNapi> {
  public:
-  void ActivateDispatchers();
-  void DeactivateDispatchers();
+  static Napi::Object Init(Napi::Env env, Napi::Object exports);
+  static Napi::Object NewInstance(Napi::Env env, Napi::Value arg);
+  AdminClientNapi(const Napi::CallbackInfo& info);
+  // ~AdminClientNapi();
+  void Finalize(Napi::Env env);
 
-  Baton Connect();
-  Baton Disconnect();
-
-  Baton CreateTopic(rd_kafka_NewTopic_t* topic, int timeout_ms);
-  Baton DeleteTopic(rd_kafka_DeleteTopic_t* topic, int timeout_ms);
-  Baton CreatePartitions(rd_kafka_NewPartitions_t* topic, int timeout_ms);
-  // Baton AlterConfig(rd_kafka_NewTopic_t* topic, int timeout_ms);
-  // Baton DescribeConfig(rd_kafka_NewTopic_t* topic, int timeout_ms);
-  explicit AdminClient(Conf* globalConfig);
-  ~AdminClient();
  protected:
- 
 
-  rd_kafka_queue_t* rkqu;
+
+
+
+  
 
  private:
+  NodeKafka::AdminClient* client;
   // Node methods
   // Napi::Value NodeValidateTopic(const Napi::CallbackInfo& info);
+  Napi::Value NodeCreateTopic(const Napi::CallbackInfo& info);
+  Napi::Value NodeDeleteTopic(const Napi::CallbackInfo& info);
+  Napi::Value NodeCreatePartitions(const Napi::CallbackInfo& info);
 
+  Napi::Value NodeConnect(const Napi::CallbackInfo& info);
+  Napi::Value NodeDisconnect(const Napi::CallbackInfo& info);
 };
 
 }  // namespace NodeKafka
 
-#endif  // SRC_ADMIN_H_
+#endif  // SRC_ADMIN_NAPI_H_

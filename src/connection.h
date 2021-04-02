@@ -10,7 +10,7 @@
 #ifndef SRC_CONNECTION_H_
 #define SRC_CONNECTION_H_
 
-#include <nan.h>
+#include <napi.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -44,7 +44,7 @@ namespace NodeKafka {
  * @sa NodeKafka::Client
  */
 
-class Connection : public Nan::ObjectWrap {
+class Connection {
  public:
   bool IsConnected();
   bool IsClosing();
@@ -66,14 +66,14 @@ class Connection : public Nan::ObjectWrap {
   virtual void ActivateDispatchers() = 0;
   virtual void DeactivateDispatchers() = 0;
 
-  virtual void ConfigureCallback(const std::string &string_key, const v8::Local<v8::Function> &cb, bool add);
-
+  virtual void ConfigureCallback(Napi::Env env, const std::string &string_key, const Napi::Function &cb, bool add);
+  Napi::Value NodeOffsetsForTimes(const Napi::CallbackInfo& info);
+  Napi::Value NodeConfigureCallbacks(const Napi::CallbackInfo& info);
+  Napi::Value NodeGetMetadata(const Napi::CallbackInfo& info);
+  Napi::Value NodeQueryWatermarkOffsets(const Napi::CallbackInfo& info);
  protected:
   Connection(Conf*, Conf*);
   ~Connection();
-
-  static Nan::Persistent<v8::Function> constructor;
-  static void New(const Nan::FunctionCallbackInfo<v8::Value>& info);
 
   bool m_has_been_disconnected;
   bool m_is_closing;
@@ -85,11 +85,6 @@ class Connection : public Nan::ObjectWrap {
   uv_rwlock_t m_connection_lock;
 
   RdKafka::Handle* m_client;
-
-  static NAN_METHOD(NodeConfigureCallbacks);
-  static NAN_METHOD(NodeGetMetadata);
-  static NAN_METHOD(NodeQueryWatermarkOffsets);
-  static NAN_METHOD(NodeOffsetsForTimes);
 };
 
 }  // namespace NodeKafka

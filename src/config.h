@@ -10,7 +10,7 @@
 #ifndef SRC_CONFIG_H_
 #define SRC_CONFIG_H_
 
-#include <nan.h>
+#include <napi.h>
 #include <iostream>
 #include <vector>
 #include <list>
@@ -26,13 +26,13 @@ class Conf : public RdKafka::Conf {
  public:
   ~Conf();
 
-  static Conf* create(RdKafka::Conf::ConfType, v8::Local<v8::Object>, std::string &);  // NOLINT
+  static Conf* create(RdKafka::Conf::ConfType, Napi::Object, std::string &);  // NOLINT
   static void DumpConfig(std::list<std::string> *);
 
   void listen();
   void stop();
 
-  void ConfigureCallback(const std::string &string_key, const v8::Local<v8::Function> &cb, bool add, std::string &errstr);
+  void ConfigureCallback(const std::string &string_key, const Napi::Function &cb, bool add, std::string &errstr);
  protected:
   NodeKafka::Callbacks::Rebalance * m_rebalance_cb = NULL;
   NodeKafka::Callbacks::OffsetCommit * m_offset_commit_cb = NULL;

@@ -10,10 +10,10 @@
 #include <iostream>
 #include "src/binding.h"
 
-using NodeKafka::Producer;
-using NodeKafka::KafkaConsumer;
-using NodeKafka::AdminClient;
-using NodeKafka::Topic;
+using NodeKafka::ProducerNapi;
+using NodeKafka::KafkaConsumerNapi;
+using NodeKafka::AdminClientNapi;
+using NodeKafka::TopicNapi;
 
 using node::AtExit;
 using RdKafka::ErrorCode;
@@ -29,66 +29,74 @@ static void RdKafkaCleanup(void*) {  // NOLINT
 
   RdKafka::wait_destroyed(5000);
 }
-
-NAN_METHOD(NodeRdKafkaErr2Str) {
-  int points = Nan::To<int>(info[0]).FromJust();
+Napi::String NodeRdKafkaErr2Str(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int points = info[0].As<Napi::Number>().Int32Value();
   // Cast to error code
   RdKafka::ErrorCode err = static_cast<RdKafka::ErrorCode>(points);
 
   std::string errstr = RdKafka::err2str(err);
 
-  info.GetReturnValue().Set(Nan::New<v8::String>(errstr).ToLocalChecked());
+  return Napi::String::New(env, errstr);
 }
 
-NAN_METHOD(NodeRdKafkaBuildInFeatures) {
+Napi::Value  NodeRdKafkaBuildInFeatures(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
   RdKafka::Conf * config = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
 
   std::string features;
-
+  Napi::Value value; 
   if (RdKafka::Conf::CONF_OK == config->get("builtin.features", features)) {
-    info.GetReturnValue().Set(Nan::New<v8::String>(features).ToLocalChecked());
+    // Napi::String::New(env, features);
+    value = Napi::String::New(env, features);
   } else {
-    info.GetReturnValue().Set(Nan::Undefined());
+    value = env.Undefined();
   }
 
   delete config;
+  return value;
 }
 
-void ConstantsInit(v8::Local<v8::Object> exports) {
-  v8::Local<v8::Object> topicConstants = Nan::New<v8::Object>();
-
+void ConstantsInit(Napi::Env env, Napi::Object exports) {
+  Napi::Object topicConstants = Napi::Object::New(env);
+  // Napi::Object topicConstants = Napi::Object::New(env);
+  topicConstants.DefineProperties({
+    Napi::PropertyDescriptor::Value("PARTITION_UA", Napi::Number::New(env, RdKafka::Topic::PARTITION_UA)),
+    Napi::PropertyDescriptor::Value("OFFSET_BEGINNING", Napi::Number::New(env, RdKafka::Topic::OFFSET_BEGINNING)),
+    Napi::PropertyDescriptor::Value("OFFSET_END", Napi::Number::New(env, RdKafka::Topic::OFFSET_END)),
+    Napi::PropertyDescriptor::Value("OFFSET_STORED", Napi::Number::New(env, RdKafka::Topic::OFFSET_STORED)),
+    Napi::PropertyDescriptor::Value("OFFSET_INVALID", Napi::Number::New(env, RdKafka::Topic::OFFSET_INVALID)),
+  });
   // RdKafka Error Code definitions
-  NODE_DEFINE_CONSTANT(topicConstants, RdKafka::Topic::PARTITION_UA);
-  NODE_DEFINE_CONSTANT(topicConstants, RdKafka::Topic::OFFSET_BEGINNING);
-  NODE_DEFINE_CONSTANT(topicConstants, RdKafka::Topic::OFFSET_END);
-  NODE_DEFINE_CONSTANT(topicConstants, RdKafka::Topic::OFFSET_STORED);
-  NODE_DEFINE_CONSTANT(topicConstants, RdKafka::Topic::OFFSET_INVALID);
+  
 
-  Nan::Set(exports, Nan::New("topic").ToLocalChecked(), topicConstants);
+  exports.Set(Napi::String::New(env,"topic"), topicConstants);
 
-  Nan::Set(exports, Nan::New("err2str").ToLocalChecked(),
-    Nan::GetFunction(Nan::New<v8::FunctionTemplate>(NodeRdKafkaErr2Str)).ToLocalChecked());  // NOLINT
+  exports.Set(Napi::String::New(env,"err2str"),
+    Napi::Function::New(env, NodeRdKafkaErr2Str));  // NOLINT
 
-  Nan::Set(exports, Nan::New("features").ToLocalChecked(),
-    Nan::GetFunction(Nan::New<v8::FunctionTemplate>(NodeRdKafkaBuildInFeatures)).ToLocalChecked());  // NOLINT
+  exports.Set(Napi::String::New(env,"features"),
+    Napi::Function::New(env, NodeRdKafkaBuildInFeatures));  // NOLINT
 }
 
-void Init(v8::Local<v8::Object> exports, v8::Local<v8::Value> m_, void* v_) {
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
 #if NODE_MAJOR_VERSION <= 9 || (NODE_MAJOR_VERSION == 10 && NODE_MINOR_VERSION <= 15)
   AtExit(RdKafkaCleanup);
 #else
-  v8::Local<v8::Context> context = Nan::GetCurrentContext();
-  node::Environment* env = node::GetCurrentEnvironment(context);
-  AtExit(env, RdKafkaCleanup, NULL);
+  // v8::Local<v8::Context> context = Nan::GetCurrentContext();
+  // node::Environment* env = node::GetCurrentEnvironment(context);
+  // AtExit(env, RdKafkaCleanup, NULL);
+  napi_add_env_cleanup_hook(env, RdKafkaCleanup, NULL);
 #endif
-  KafkaConsumer::Init(exports);
-  Producer::Init(exports);
-  AdminClient::Init(exports);
-  Topic::Init(exports);
-  ConstantsInit(exports);
+  KafkaConsumerNapi::Init(env, exports);
+  ProducerNapi::Init(env, exports);
+  AdminClientNapi::Init(env, exports);
+  TopicNapi::Init(env, exports);
+  ConstantsInit(env, exports);
 
-  Nan::Set(exports, Nan::New("librdkafkaVersion").ToLocalChecked(),
-      Nan::New(RdKafka::version_str().c_str()).ToLocalChecked());
+  exports.Set(Napi::String::New(env,"librdkafkaVersion"),
+      Napi::String::New(env, RdKafka::version_str().c_str()));
+  return exports;
 }
 
-NODE_MODULE(kafka, Init)
+NODE_API_MODULE(kafka, Init)

@@ -215,7 +215,7 @@ Baton Connection::GetMetadata(
   }
 }
 
-void Connection::ConfigureCallback(const std::string &string_key, const v8::Local<v8::Function> &cb, bool add) {
+void Connection::ConfigureCallback(Napi::Env env,const std::string &string_key, const Napi::Function &cb, bool add) {
   if (string_key.compare("event_cb") == 0) {
     if (add) {
       this->m_event_cb.dispatcher.AddCallback(cb);
@@ -227,143 +227,132 @@ void Connection::ConfigureCallback(const std::string &string_key, const v8::Loca
 
 // NAN METHODS
 
-NAN_METHOD(Connection::NodeGetMetadata) {
-  Nan::HandleScope scope;
+Napi::Value Connection::NodeGetMetadata(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
 
-  Connection* obj = ObjectWrap::Unwrap<Connection>(info.This());
 
-  v8::Local<v8::Object> config;
-  if (info[0]->IsObject()) {
-    config = info[0].As<v8::Object>();
+  Napi::Object config;
+  if (info[0].IsObject()) {
+    config = info[0].As<Napi::Object>();
   } else {
-    config = Nan::New<v8::Object>();
+    config = Napi::Object::New(env);
   }
 
-  if (!info[1]->IsFunction()) {
-    Nan::ThrowError("Second parameter must be a callback");
-    return;
+  if (!info[1].IsFunction()) {
+    Napi::TypeError::New(env, "Second parameter must be a callback").ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  v8::Local<v8::Function> cb = info[1].As<v8::Function>();
+  Napi::Function cb = info[1].As<Napi::Function>();
 
   std::string topic = GetParameter<std::string>(config, "topic", "");
   bool allTopics = GetParameter<bool>(config, "allTopics", true);
   int timeout_ms = GetParameter<int64_t>(config, "timeout", 30000);
 
-  Nan::Callback *callback = new Nan::Callback(cb);
 
-  Nan::AsyncQueueWorker(new Workers::ConnectionMetadata(
-    callback, obj, topic, timeout_ms, allTopics));
-
-  info.GetReturnValue().Set(Nan::Null());
+  new Workers::ConnectionMetadata(
+    cb, this, topic, timeout_ms, allTopics
+  );
+  return env.Null();
 }
 
-NAN_METHOD(Connection::NodeOffsetsForTimes) {
-  Nan::HandleScope scope;
-
-  if (info.Length() < 3 || !info[0]->IsArray()) {
+Napi::Value Connection::NodeOffsetsForTimes(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[0].IsArray()) {
     // Just throw an exception
-    return Nan::ThrowError("Need to specify an array of topic partitions");
+    Napi::TypeError::New(env, "Need to specify an array of topic partitions").ThrowAsJavaScriptException();
+    return env.Null();
   }
 
   std::vector<RdKafka::TopicPartition *> toppars =
-    Conversion::TopicPartition::FromV8Array(info[0].As<v8::Array>());
+    Conversion::TopicPartition::FromV8Array(info[0].As<Napi::Array>());
 
-  int timeout_ms;
-  Nan::Maybe<uint32_t> maybeTimeout =
-    Nan::To<uint32_t>(info[1].As<v8::Number>());
-
-  if (maybeTimeout.IsNothing()) {
-    timeout_ms = 1000;
+  Napi::Number timeoutMs = (info[1].As<Napi::Number>());
+  uint32_t timeout_ms;
+  uint32_t DEFAULT_TIMEOUT = 1000;
+  if (timeoutMs.IsEmpty()) {
+    timeout_ms = DEFAULT_TIMEOUT;
   } else {
-    timeout_ms = static_cast<int>(maybeTimeout.FromJust());
+    timeout_ms = timeoutMs.Int32Value();
+    if (timeout_ms <=0) {
+      timeout_ms = DEFAULT_TIMEOUT;
+    }
   }
 
-  v8::Local<v8::Function> cb = info[2].As<v8::Function>();
-  Nan::Callback *callback = new Nan::Callback(cb);
-
-  Connection* handle = ObjectWrap::Unwrap<Connection>(info.This());
-
-  Nan::AsyncQueueWorker(
-    new Workers::Handle::OffsetsForTimes(callback, handle,
-      toppars, timeout_ms));
-
-  info.GetReturnValue().Set(Nan::Null());
+  Napi::Function cb = info[2].As<Napi::Function>();
+  new Workers::Handle::OffsetsForTimes(cb, this,
+      toppars, timeout_ms);
+  return env.Null();
 }
 
-NAN_METHOD(Connection::NodeQueryWatermarkOffsets) {
-  Nan::HandleScope scope;
+Napi::Value Connection::NodeQueryWatermarkOffsets(const Napi::CallbackInfo& info) {
+  
+  Napi::Env env = info.Env();
+  // Connection* obj = ObjectWrap::Unwrap<Connection>(info.This());
 
-  Connection* obj = ObjectWrap::Unwrap<Connection>(info.This());
-
-  if (!info[0]->IsString()) {
-    Nan::ThrowError("1st parameter must be a topic string");;
-    return;
+  if (!info[0].IsString()) {
+    Napi::TypeError::New(env, "1st parameter must be a topic string").ThrowAsJavaScriptException();;
+    return env.Null();;
   }
 
-  if (!info[1]->IsNumber()) {
-    Nan::ThrowError("2nd parameter must be a partition number");
-    return;
+  if (!info[1].IsNumber()) {
+    Napi::TypeError::New(env, "2nd parameter must be a partition number").ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  if (!info[2]->IsNumber()) {
-    Nan::ThrowError("3rd parameter must be a number of milliseconds");
-    return;
+  if (!info[2].IsNumber()) {
+    Napi::TypeError::New(env, "3rd parameter must be a number of milliseconds").ThrowAsJavaScriptException();
+    return env.Null();
   }
 
-  if (!info[3]->IsFunction()) {
-    Nan::ThrowError("4th parameter must be a callback");
-    return;
+  if (!info[3].IsFunction()) {
+    Napi::TypeError::New(env, "4th parameter must be a callback").ThrowAsJavaScriptException();
+    return env.Null();
   }
 
   // Get string pointer for the topic name
-  Nan::Utf8String topicUTF8(Nan::To<v8::String>(info[0]).ToLocalChecked());
   // The first parameter is the topic
-  std::string topic_name(*topicUTF8);
+  std::string topic_name = info[0].As<Napi::String>().Utf8Value();
 
   // Second parameter is the partition
-  int32_t partition = Nan::To<int32_t>(info[1]).FromJust();
+  int32_t partition = info[1].As<Napi::Number>().Int32Value();
 
   // Third parameter is the timeout
-  int timeout_ms = Nan::To<int>(info[2]).FromJust();
+  int timeout_ms = info[2].As<Napi::Number>().Int32Value();
 
   // Fourth parameter is the callback
-  v8::Local<v8::Function> cb = info[3].As<v8::Function>();
-  Nan::Callback *callback = new Nan::Callback(cb);
+  Napi::Function cb = info[3].As<Napi::Function>();
 
-  Nan::AsyncQueueWorker(new Workers::ConnectionQueryWatermarkOffsets(
-    callback, obj, topic_name, partition, timeout_ms));
-
-  info.GetReturnValue().Set(Nan::Null());
+  new Workers::ConnectionQueryWatermarkOffsets(
+    cb, this, topic_name, partition, timeout_ms);
+  return env.Null();
 }
 
 // Node methods
-NAN_METHOD(Connection::NodeConfigureCallbacks) {
-  Nan::HandleScope scope;
+Napi::Value Connection::NodeConfigureCallbacks(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
 
   if (info.Length() < 2 ||
-    !info[0]->IsBoolean() ||
-    !info[1]->IsObject()) {
+    !info[0].IsBoolean() ||
+    !info[1].IsObject()) {
     // Just throw an exception
-    return Nan::ThrowError("Need to specify a callbacks object");
+    Napi::TypeError::New(env, "Need to specify a callbacks object").ThrowAsJavaScriptException();
+    return env.Null();
   }
-  v8::Local<v8::Context> context = Nan::GetCurrentContext();
-  Connection* obj = ObjectWrap::Unwrap<Connection>(info.This());
 
-  const bool add = Nan::To<bool>(info[0]).ToChecked();
-  v8::Local<v8::Object> configs_object = info[1]->ToObject(context).ToLocalChecked();
-  v8::Local<v8::Array> configs_property_names = configs_object->GetOwnPropertyNames(context).ToLocalChecked();
+  const bool add = info[0].As<Napi::Boolean>().Value();
+  Napi::Object configs_object = info[1].ToObject();
+  Napi::Array configs_property_names = configs_object.GetPropertyNames();
 
-  for (unsigned int j = 0; j < configs_property_names->Length(); ++j) {
+  for (unsigned int j = 0; j < configs_property_names.Length(); ++j) {
     std::string configs_string_key;
 
-    v8::Local<v8::Value> configs_key = Nan::Get(configs_property_names, j).ToLocalChecked();
-    v8::Local<v8::Value> configs_value = Nan::Get(configs_object, configs_key).ToLocalChecked();
+    Napi::Value configs_key = configs_property_names.Get(j);
+    Napi::Value configs_value = configs_object.Get(configs_key);
 
     int config_type = 0;
-    if (configs_value->IsObject() && configs_key->IsString()) {
-      Nan::Utf8String configs_utf8_key(configs_key);
-      configs_string_key = std::string(*configs_utf8_key);
+    if (configs_value.IsObject() && configs_key.IsString()) {
+      configs_string_key = configs_key.ToString().Utf8Value();
       if (configs_string_key.compare("global") == 0) {
           config_type = 1;
       } else if (configs_string_key.compare("topic") == 0) {
@@ -377,47 +366,47 @@ NAN_METHOD(Connection::NodeConfigureCallbacks) {
       continue;
     }
 
-    v8::Local<v8::Object> object = configs_value->ToObject(context).ToLocalChecked();
-    v8::Local<v8::Array> property_names = object->GetOwnPropertyNames(context).ToLocalChecked();
+    Napi::Object object = configs_value.ToObject();
+    Napi::Array property_names = object.GetPropertyNames();
 
-    for (unsigned int i = 0; i < property_names->Length(); ++i) {
+    for (unsigned int i = 0; i < property_names.Length(); ++i) {
       std::string errstr;
       std::string string_key;
 
-      v8::Local<v8::Value> key = Nan::Get(property_names, i).ToLocalChecked();
-      v8::Local<v8::Value> value = Nan::Get(object, key).ToLocalChecked();
+      Napi::Value key = property_names.Get(i);
+      Napi::Value value = object.Get(key);
 
-      if (key->IsString()) {
-        Nan::Utf8String utf8_key(key);
-        string_key = std::string(*utf8_key);
+      if (key.IsString()) {
+        string_key = key.ToString().Utf8Value();
       } else {
         continue;
       }
 
-      if (value->IsFunction()) {
-        v8::Local<v8::Function> cb = value.As<v8::Function>();
+      if (value.IsFunction()) {
+        Napi::Function cb = value.As<Napi::Function>();
         switch (config_type) {
           case 1:
-            obj->m_gconfig->ConfigureCallback(string_key, cb, add, errstr);
+            m_gconfig->ConfigureCallback(string_key, cb, add, errstr);
             if (!errstr.empty()) {
-              return Nan::ThrowError(errstr.c_str());
+              Napi::TypeError::New(env, errstr.c_str()).ThrowAsJavaScriptException();
+              return env.Null();
             }
             break;
           case 2:
-            obj->m_tconfig->ConfigureCallback(string_key, cb, add, errstr);
+            m_tconfig->ConfigureCallback(string_key, cb, add, errstr);
             if (!errstr.empty()) {
-              return Nan::ThrowError(errstr.c_str());
+              Napi::TypeError::New(env, errstr.c_str()).ThrowAsJavaScriptException();
+              return env.Null();
             }
             break;
           case 3:
-            obj->ConfigureCallback(string_key, cb, add);
+            ConfigureCallback(env, string_key, cb, add);
             break;
         }
       }
     }
   }
-
-  info.GetReturnValue().Set(Nan::True());
+  return env.Null();
 }
 
 }  // namespace NodeKafka

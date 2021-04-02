@@ -14,35 +14,32 @@
 #include "src/callbacks.h"
 #include "src/kafka-consumer.h"
 
-using v8::Local;
-using v8::Value;
-using v8::Object;
-using v8::String;
-using v8::Array;
-using v8::Number;
+using Napi::Object;
+using Napi::Array;
+using Napi::Number;
 
 namespace NodeKafka {
 namespace Callbacks {
 
-v8::Local<v8::Array> TopicPartitionListToV8Array(
+Napi::Array TopicPartitionListToV8Array(Napi::Env env,
   std::vector<event_topic_partition_t> parts) {
-  v8::Local<v8::Array> tp_array = Nan::New<v8::Array>();
+  Napi::Array tp_array = Napi::Array::New(env);
 
   for (size_t i = 0; i < parts.size(); i++) {
-    v8::Local<v8::Object> tp_obj = Nan::New<v8::Object>();
+    Napi::Object tp_obj = Napi::Object::New(env);
     event_topic_partition_t tp = parts[i];
 
-    Nan::Set(tp_obj, Nan::New("topic").ToLocalChecked(),
-      Nan::New<v8::String>(tp.topic.c_str()).ToLocalChecked());
-    Nan::Set(tp_obj, Nan::New("partition").ToLocalChecked(),
-      Nan::New<v8::Number>(tp.partition));
+    tp_obj.Set("topic",
+      Napi::String::New(env, tp.topic.c_str()));
+    tp_obj.Set("partition",
+      Napi::Number::New(env, tp.partition));
 
     if (tp.offset >= 0) {
-      Nan::Set(tp_obj, Nan::New("offset").ToLocalChecked(),
-        Nan::New<v8::Number>(tp.offset));
+      tp_obj.Set("offset",
+        Napi::Number::New(env, tp.offset));
     }
 
-    Nan::Set(tp_array, i, tp_obj);
+    tp_array.Set(i, tp_obj);
   }
 
   return tp_array;
@@ -56,9 +53,9 @@ Dispatcher::Dispatcher() {
 Dispatcher::~Dispatcher() {
   if (callbacks.size() < 1) return;
 
-  for (size_t i=0; i < callbacks.size(); i++) {
-    callbacks[i].Reset();
-  }
+  // for (size_t i=0; i < callbacks.size(); i++) {
+  //   callbacks[i].Reset();
+  // }
 
   uv_mutex_destroy(&async_lock);
 }
@@ -91,30 +88,27 @@ void Dispatcher::Execute() {
   }
 }
 
-void Dispatcher::Dispatch(const int _argc, Local<Value> _argv[]) {
+void Dispatcher::Dispatch(const std::vector<napi_value>& args) {
   // This should probably be an array of v8 values
   if (!HasCallbacks()) {
     return;
   }
 
   for (size_t i=0; i < callbacks.size(); i++) {
-    v8::Local<v8::Function> f = Nan::New<v8::Function>(callbacks[i]);
-    Nan::Callback cb(f);
-    cb.Call(_argc, _argv);
+    Napi::Function cb =  callbacks[i];
+    cb.Call( args);
   }
 }
 
-void Dispatcher::AddCallback(const v8::Local<v8::Function> &cb) {
-  Nan::Persistent<v8::Function,
-                  Nan::CopyablePersistentTraits<v8::Function> > value(cb);
+void Dispatcher::AddCallback(const Napi::Function cb) {
   // PersistentCopyableFunction value(func);
-  callbacks.push_back(value);
+  callbacks.push_back(cb);
 }
 
-void Dispatcher::RemoveCallback(const v8::Local<v8::Function> &cb) {
+void Dispatcher::RemoveCallback(const Napi::Function cb) {
   for (size_t i=0; i < callbacks.size(); i++) {
     if (callbacks[i] == cb) {
-      callbacks[i].Reset();
+      // callbacks[i].Reset();
       callbacks.erase(callbacks.begin() + i);
       break;
     }
@@ -180,8 +174,8 @@ void EventDispatcher::Add(const event_t &e) {
   events.push_back(e);
 }
 
-void EventDispatcher::Flush() {
-  Nan::HandleScope scope;
+void EventDispatcher::Flush(Napi::Env env) {
+  
   // Iterate through each of the currently stored events
   // generate a callback object for each, setting to the members
   // then
@@ -196,54 +190,54 @@ void EventDispatcher::Flush() {
   }
 
   for (size_t i=0; i < _events.size(); i++) {
-    Local<Value> argv[argc] = {};
-    Local<Object> jsobj = Nan::New<Object>();
+    Napi::Value argv[argc] = {};
+    Napi::Object jsobj = Napi::Object::New(env);
 
     switch (_events[i].type) {
       case RdKafka::Event::EVENT_ERROR:
-        argv[0] = Nan::New("error").ToLocalChecked();
-        argv[1] = Nan::Error(_events[i].message.c_str());
+        argv[0] = Napi::String::New(env, "error");
+        argv[1] = Napi::String::New(env, _events[i].message.c_str());
 
         // if (event->err() == RdKafka::ERR__ALL_BROKERS_DOWN). Stop running
         // This may be better suited to the node side of things
         break;
       case RdKafka::Event::EVENT_STATS:
-        argv[0] = Nan::New("stats").ToLocalChecked();
+        argv[0] = Napi::String::New(env, "stats");
 
-        Nan::Set(jsobj, Nan::New("message").ToLocalChecked(),
-          Nan::New<String>(_events[i].message.c_str()).ToLocalChecked());
+        jsobj.Set("message",
+          Napi::String::New(env, _events[i].message.c_str()));
 
         break;
       case RdKafka::Event::EVENT_LOG:
-        argv[0] = Nan::New("log").ToLocalChecked();
+        argv[0] = Napi::String::New(env, "log");
 
-        Nan::Set(jsobj, Nan::New("severity").ToLocalChecked(),
-          Nan::New(_events[i].severity));
-        Nan::Set(jsobj, Nan::New("fac").ToLocalChecked(),
-          Nan::New(_events[i].fac.c_str()).ToLocalChecked());
-        Nan::Set(jsobj, Nan::New("message").ToLocalChecked(),
-          Nan::New(_events[i].message.c_str()).ToLocalChecked());
+        jsobj.Set("severity",
+          Napi::Number::New(env, _events[i].severity));
+        jsobj.Set("fac",
+          Napi::String::New(env, _events[i].fac.c_str()));
+        jsobj.Set("message",
+          Napi::String::New(env, _events[i].message.c_str()));
 
         break;
       case RdKafka::Event::EVENT_THROTTLE:
-        argv[0] = Nan::New("throttle").ToLocalChecked();
+        argv[0] = Napi::String::New(env, "throttle");
 
-        Nan::Set(jsobj, Nan::New("message").ToLocalChecked(),
-          Nan::New(_events[i].message.c_str()).ToLocalChecked());
+        jsobj.Set("message",
+          Napi::String::New(env, _events[i].message.c_str()));
 
-        Nan::Set(jsobj, Nan::New("throttleTime").ToLocalChecked(),
-          Nan::New(_events[i].throttle_time));
-        Nan::Set(jsobj, Nan::New("brokerName").ToLocalChecked(),
-          Nan::New(_events[i].broker_name).ToLocalChecked());
-        Nan::Set(jsobj, Nan::New("brokerId").ToLocalChecked(),
-          Nan::New<Number>(_events[i].broker_id));
+        jsobj.Set("throttleTime",
+          Napi::Number::New(env, _events[i].throttle_time));
+        jsobj.Set("brokerName",
+          Napi::String::New(env, _events[i].broker_name));
+        jsobj.Set("brokerId",
+          Napi::Number::New(env, _events[i].broker_id));
 
         break;
       default:
-        argv[0] = Nan::New("event").ToLocalChecked();
+        argv[0] = Napi::String::New(env, "event");
 
-        Nan::Set(jsobj, Nan::New("message").ToLocalChecked(),
-          Nan::New(events[i].message.c_str()).ToLocalChecked());
+        jsobj.Set("message",
+          Napi::String::New(env, events[i].message.c_str()));
 
         break;
     }
@@ -253,7 +247,7 @@ void EventDispatcher::Flush() {
       argv[1] = jsobj;
     }
 
-    Dispatch(argc, argv);
+    Dispatch({argv[0],argv[1]});
   }
 }
 
@@ -266,8 +260,8 @@ size_t DeliveryReportDispatcher::Add(const DeliveryReport &e) {
   return events.size();
 }
 
-void DeliveryReportDispatcher::Flush() {
-  Nan::HandleScope scope;
+void DeliveryReportDispatcher::Flush(Napi::Env env) {
+  
 
   const unsigned int argc = 2;
 
@@ -285,74 +279,74 @@ void DeliveryReportDispatcher::Flush() {
   }
 
   for (size_t i = 0; i < events_list.size(); i++) {
-    v8::Local<v8::Value> argv[argc] = {};
+    Napi::Value argv[argc] = {};
 
     const DeliveryReport& event = events_list[i];
 
     if (event.is_error) {
         // If it is an error we need the first argument to be set
-        argv[0] = Nan::Error(event.error_string.c_str());
+        argv[0] = Napi::String::New(env, event.error_string.c_str());
     } else {
-        argv[0] = Nan::Null();
+        argv[0] = env.Null();
     }
-    Local<Object> jsobj(Nan::New<Object>());
+    Napi::Object jsobj(Napi::Object::New(env));
 
-    Nan::Set(jsobj, Nan::New("topic").ToLocalChecked(),
-            Nan::New(event.topic_name).ToLocalChecked());
-    Nan::Set(jsobj, Nan::New("partition").ToLocalChecked(),
-            Nan::New<v8::Number>(event.partition));
-    Nan::Set(jsobj, Nan::New("offset").ToLocalChecked(),
-            Nan::New<v8::Number>(event.offset));
+    jsobj.Set("topic",
+            Napi::String::New(env, event.topic_name));
+    jsobj.Set("partition",
+            Napi::Number::New(env, event.partition));
+    jsobj.Set("offset",
+            Napi::Number::New(env, event.offset));
 
     if (event.key) {
-      Nan::MaybeLocal<v8::Object> buff = Nan::NewBuffer(
-        static_cast<char*>(event.key),
-        static_cast<int>(event.key_len));
-
-      Nan::Set(jsobj, Nan::New("key").ToLocalChecked(),
-              buff.ToLocalChecked());
+      Napi::Buffer<char> buff = Napi::Buffer<char>::New(
+        env, static_cast<char*>(event.key), static_cast<int>(event.key_len)
+      );
+      jsobj.Set("key",
+              buff);
     } else {
-      Nan::Set(jsobj, Nan::New("key").ToLocalChecked(), Nan::Null());
+      jsobj.Set("key", env.Null());
     }
 
-    if (event.opaque) {
-      Nan::Persistent<v8::Value> * persistent =
-        static_cast<Nan::Persistent<v8::Value> *>(event.opaque);
-      v8::Local<v8::Value> object = Nan::New(*persistent);
-      Nan::Set(jsobj, Nan::New("opaque").ToLocalChecked(), object);
+    if (event.opaque) {//TODO support opaque
+      // Nan::Persistent<v8::Value> * persistent =
+      //   static_cast<Nan::Persistent<v8::Value> *>(event.opaque);
+      // Napi::Value object = Napi::String::New(env, *persistent);
+      // jsobj.Set("opaque", object);
 
-      // Okay... now reset and destroy the persistent handle
-      persistent->Reset();
+      // // Okay... now reset and destroy the persistent handle
+      // persistent->Reset();
 
-      // Get rid of the persistent since we are making it local
-      delete persistent;
+      // // Get rid of the persistent since we are making it local
+      // delete persistent;
     }
 
     if (event.timestamp > -1) {
-      Nan::Set(jsobj, Nan::New("timestamp").ToLocalChecked(),
-              Nan::New<v8::Number>(event.timestamp));
+      jsobj.Set("timestamp",
+              Napi::Number::New(env, event.timestamp));
     }
 
     if (event.m_include_payload) {
-      if (event.payload) {
-        Nan::MaybeLocal<v8::Object> buff = Nan::NewBuffer(
-          static_cast<char*>(event.payload),
-          static_cast<int>(event.len));
+        if (event.payload) {
+          Napi::Buffer<char> buff = Napi::Buffer<char>::New(
+          env, static_cast<char*>(event.key), static_cast<int>(event.key_len)
+        );
 
-        Nan::Set(jsobj, Nan::New<v8::String>("value").ToLocalChecked(),
-          buff.ToLocalChecked());
+
+        jsobj.Set("value",
+          buff);
       } else {
-        Nan::Set(jsobj, Nan::New<v8::String>("value").ToLocalChecked(),
-          Nan::Null());
+        jsobj.Set("value",
+          env.Null());
       }
     }
 
-    Nan::Set(jsobj, Nan::New<v8::String>("size").ToLocalChecked(),
-            Nan::New<v8::Number>(event.len));
+    jsobj.Set("size",
+            Napi::Number::New(env, event.len));
 
     argv[1] = jsobj;
 
-    Dispatch(argc, argv);
+    Dispatch({argv[0], argv[1]});
   }
   if (outstanding_event_count > events_list.size()) {
     Execute();
@@ -407,7 +401,7 @@ DeliveryReport::DeliveryReport(RdKafka::Message &message, bool include_payload) 
 
   if (m_include_payload && message.payload()) {
     // this pointer will be owned and freed by the Nan::NewBuffer
-    // created in DeliveryReportDispatcher::Flush()
+    // created in DeliveryReportDispatcher::Flush(Napi::Env env)
     payload = malloc(len);
     memcpy(payload, message.payload(), len);
   } else {
@@ -451,8 +445,8 @@ void RebalanceDispatcher::Add(const rebalance_event_t &e) {
   m_events.push_back(e);
 }
 
-void RebalanceDispatcher::Flush() {
-  Nan::HandleScope scope;
+void RebalanceDispatcher::Flush(Napi::Env env) {
+  
   // Iterate through each of the currently stored events
   // generate a callback object for each, setting to the members
   // then
@@ -468,21 +462,21 @@ void RebalanceDispatcher::Flush() {
   }
 
   for (size_t i=0; i < events.size(); i++) {
-    v8::Local<v8::Value> argv[argc] = {};
+    Napi::Value argv[argc] = {};
 
     if (events[i].err == RdKafka::ERR_NO_ERROR) {
-      argv[0] = Nan::Undefined();
+      argv[0] = env.Undefined();
     } else {
       // ERR__ASSIGN_PARTITIONS? Special case? Nah
-      argv[0] = Nan::New(events[i].err);
+      argv[0] = Napi::Number::New(env, events[i].err);
     }
 
     std::vector<event_topic_partition_t> parts = events[i].partitions;
 
     // Now convert the TopicPartition list to a JS array
-    argv[1] = TopicPartitionListToV8Array(events[i].partitions);
+    argv[1] = TopicPartitionListToV8Array(env, events[i].partitions);
 
-    Dispatch(argc, argv);
+    Dispatch({argv[0], argv[1]});
   }
 }
 
@@ -502,8 +496,8 @@ void OffsetCommitDispatcher::Add(const offset_commit_event_t &e) {
   m_events.push_back(e);
 }
 
-void OffsetCommitDispatcher::Flush() {
-  Nan::HandleScope scope;
+void OffsetCommitDispatcher::Flush(Napi::Env env) {
+  
   // Iterate through each of the currently stored events
   // generate a callback object for each, setting to the members
   // then
@@ -519,18 +513,18 @@ void OffsetCommitDispatcher::Flush() {
   }
 
   for (size_t i = 0; i < events.size(); i++) {
-    v8::Local<v8::Value> argv[argc] = {};
+    Napi::Value argv[argc] = {};
 
     if (events[i].err == RdKafka::ERR_NO_ERROR) {
-      argv[0] = Nan::Undefined();
+      argv[0] = env.Undefined();
     } else {
-      argv[0] = Nan::New(events[i].err);
+      argv[0] = Napi::Number::New(env, events[i].err);
     }
 
     // Now convert the TopicPartition list to a JS array
-    argv[1] = TopicPartitionListToV8Array(events[i].partitions);
+    argv[1] = TopicPartitionListToV8Array(env, events[i].partitions);
 
-    Dispatch(argc, argv);
+    Dispatch({argv[0], argv[1]});
   }
 }
 
@@ -545,7 +539,49 @@ void OffsetCommit::offset_commit_cb(RdKafka::ErrorCode err,
 Partitioner::Partitioner() {}
 Partitioner::~Partitioner() {}
 
-int32_t Partitioner::partitioner_cb(const RdKafka::Topic *topic,
+int32_t Partitioner::partitioner_cb(//TODO not support
+                                    const RdKafka::Topic *topic,
+                                    const std::string *key,
+                                    int32_t partition_cnt,
+                                    void *msg_opaque) {
+  // Send this and get the callback and parse the int
+  // if (callback.IsEmpty()) {
+  //   // default behavior
+  //   return random(topic, partition_cnt);
+  // }
+
+  // Napi::Value argv[3] = {};
+
+  // argv[0] = Napi::String::New(env, topic->name().c_str());
+  // if (key->empty()) {
+  //   argv[1] = env.Null();
+  // } else {
+  //   argv[1] = Napi::String::New(env, key->c_str());
+  // }
+
+  // argv[2] = Napi::Number::New(env, partition_cnt);
+
+  // Napi::Value return_value = callback.Call({argv[0], argv[1], argv[2]});
+
+  // Napi::Number partition_return = return_value.ToNumber();
+
+  // int32_t chosen_partition;
+
+  // if (partition_return.IsEmpty()) {
+  //   chosen_partition = RdKafka::Topic::PARTITION_UA;
+  // } else {
+  //    chosen_partition = partition_return.Int32Value();
+  // }
+
+  if (!topic->partition_available(partition_cnt)) {
+    return RdKafka::Topic::PARTITION_UA;
+  }
+
+  return -1;//chosen_partition;
+}
+
+int32_t Partitioner::partitionerCallback(Napi::Env env,
+                                    const RdKafka::Topic *topic,
                                     const std::string *key,
                                     int32_t partition_cnt,
                                     void *msg_opaque) {
@@ -555,27 +591,27 @@ int32_t Partitioner::partitioner_cb(const RdKafka::Topic *topic,
     return random(topic, partition_cnt);
   }
 
-  Local<Value> argv[3] = {};
+  Napi::Value argv[3] = {};
 
-  argv[0] = Nan::New<v8::String>(topic->name().c_str()).ToLocalChecked();
+  argv[0] = Napi::String::New(env, topic->name().c_str());
   if (key->empty()) {
-    argv[1] = Nan::Null();
+    argv[1] = env.Null();
   } else {
-    argv[1] = Nan::New<v8::String>(key->c_str()).ToLocalChecked();
+    argv[1] = Napi::String::New(env, key->c_str());
   }
 
-  argv[2] = Nan::New<v8::Int32>(partition_cnt);
+  argv[2] = Napi::Number::New(env, partition_cnt);
 
-  v8::Local<v8::Value> return_value = callback.Call(3, argv);
+  Napi::Value return_value = callback.Call({argv[0], argv[1], argv[2]});
 
-  Nan::Maybe<int32_t> partition_return = Nan::To<int32_t>(return_value);
+  Napi::Number partition_return = return_value.ToNumber();
 
   int32_t chosen_partition;
 
-  if (partition_return.IsNothing()) {
+  if (partition_return.IsEmpty()) {
     chosen_partition = RdKafka::Topic::PARTITION_UA;
   } else {
-     chosen_partition = partition_return.FromJust();
+     chosen_partition = partition_return.Int32Value();
   }
 
   if (!topic->partition_available(chosen_partition)) {
@@ -602,8 +638,8 @@ unsigned int Partitioner::random(const RdKafka::Topic *topic, int32_t max) {
   }
 }
 
-void Partitioner::SetCallback(v8::Local<v8::Function> cb) {
-  callback(cb);
+void Partitioner::SetCallback(Napi::Function cb) {
+  callback = cb;
 }
 
 

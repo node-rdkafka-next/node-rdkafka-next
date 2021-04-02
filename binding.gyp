@@ -15,15 +15,21 @@
         'src/connection.cc',
         'src/errors.cc',
         'src/kafka-consumer.cc',
+        'src/kafka-consumer-napi.cc',
         'src/producer.cc',
+        'src/producer-napi.cc',
         'src/topic.cc',
+        'src/topic-napi.cc',
         'src/workers.cc',
-        'src/admin.cc'
+        'src/admin.cc',
+        'src/admin-napi.cc'
       ],
       "include_dirs": [
-        "<!(node -e \"require('nan')\")",
+        "<!(node -p \"require('node-addon-api').include_dir\")",
         "<(module_root_dir)/"
       ],
+      'dependencies': ["<!(node -p \"require('node-addon-api').gyp\")"],
+      'defines': [ 'NAPI_DISABLE_CPP_EXCEPTIONS' ],
       'conditions': [
         [
           'OS=="win"',
@@ -56,6 +62,7 @@
                 ]
               },
               'VCCLCompilerTool': {
+                "ExceptionHandling": 1,
                 'AdditionalOptions': [
                   '/GR'
                 ],
@@ -132,8 +139,11 @@
               [
                 'OS=="mac"',
                 {
+                  'cflags+': ['-fvisibility=hidden'],
                   'xcode_settings': {
                     'MACOSX_DEPLOYMENT_TARGET': '10.11',
+                    "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
+                    'GCC_SYMBOLS_PRIVATE_EXTERN': 'YES', # -fvisibility=hidden
                     'GCC_ENABLE_CPP_RTTI': 'YES',
                     'OTHER_LDFLAGS': [
                       '-L/usr/local/opt/openssl/lib'
